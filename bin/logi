@@ -362,6 +362,8 @@ def reclaim_lighting(entries):
         # a keyboard that comes back from suspend (or boot) dark until
         # something else writes an effect.
         for setting in zones:
+            if unsaved_led_zone(setting):
+                continue
             try:
                 setting.read(True)
             except Exception:
@@ -373,7 +375,7 @@ def reclaim_lighting(entries):
                 # it, so put the cached zone effects back by hand.
                 if control.name == "led_control":
                     for setting in zones:
-                        value = setting.read(True)
+                        value = None if unsaved_led_zone(setting) else setting.read(True)
                         if value is not None:
                             setting.write(value)
         except Exception:
@@ -436,7 +438,21 @@ def cache_only(setting):
     )
 
 
+def unsaved_led_zone(setting):
+    """A led_zone_* with nothing in solaar's config yet.
+
+    solaar's cached read falls through to a live read when nothing is cached,
+    and would persist that shifted reply, so treat the zone as unknown instead.
+    """
+    persister = getattr(setting._device, "persister", None)
+    return setting.name.startswith("led_zone_") and setting._value is None and (
+        persister is None or setting.name not in persister
+    )
+
+
 def read_value(setting):
+    if unsaved_led_zone(setting):
+        return None
     try:
         return setting.read(cache_only(setting))
     except Exception:
@@ -806,7 +822,7 @@ def apply_rgb(entry, slug, color, period, zones):
             params["intensity"] = 100
         setting = find_setting(entry, zone["setting"])
         value = LEDEffectSetting(**params)
-        if effect_id == 0x04:
+        if effect_id == 0x04 and zone["setting"].startswith("led_zone_"):
             # solaar's 0x04 layout (period at 6-7, direction at 9) is a guess the
             # PRO Gaming Keyboard rejects with INVALID_ARGUMENT. It takes period
             # low at 6, direction at 7, intensity at 8, period high at 9, so
