@@ -74,6 +74,8 @@ Panel {
 
   property int selectedIndex: 0
   property bool cursorActive: false
+  // The hex field owns the keyboard while it has focus.
+  property bool editingColor: false
 
   function rowIndex(key, name) {
     for (var i = 0; i < rows.length; i++) {
@@ -434,6 +436,7 @@ Panel {
     PanelKeyCatcher {
       id: keyCatcher
       anchors.fill: parent
+      blocked: root.editingColor
       onMoveRequested: function (dx, dy) {
         if (!root.cursorActive) { root.cursorActive = true; return }
         root.moveCursor(dx, dy)
@@ -952,6 +955,14 @@ Panel {
     readonly property string activeEffect: current && current.slug ? current.slug : root.lightingEffect
     readonly property string activeColor: current && current.color ? "#" + current.color : root.lightingColor
     property bool picking: false
+    readonly property bool customColor: !Model.swatches(logitech.accent).some(function (s) {
+      return Model.hexOf(s.color) === Model.hexOf(lighting.activeColor)
+    })
+
+    Connections {
+      target: root
+      function onOpenedChanged() { if (root.opened) lighting.picking = false }
+    }
 
     // Swatches, the hue strip and the hex field all land here. Only
     // color-bearing effects can show a color; nudge the effect to Static so a
@@ -1090,8 +1101,8 @@ Panel {
             GradientStop { position: 0.5; color: "#00ff00" }
             GradientStop { position: 1.0; color: "#0000ff" }
           }
-          border.width: lighting.picking ? Style.normalBorderWidth * 2 : Style.normalBorderWidth
-          border.color: lighting.picking ? root.foreground
+          border.width: lighting.picking || lighting.customColor ? Style.normalBorderWidth * 2 : Style.normalBorderWidth
+          border.color: lighting.picking || lighting.customColor ? root.foreground
             : Util.alpha(root.foreground, customMouse.containsMouse ? 0.7 : 0.35)
           scale: customMouse.containsMouse ? 1.12 : 1
 
@@ -1168,6 +1179,7 @@ Panel {
             lighting.closePicker()
           }
           Keys.onEscapePressed: lighting.closePicker()
+          onActiveFocusChanged: root.editingColor = activeFocus
         }
       }
     }
